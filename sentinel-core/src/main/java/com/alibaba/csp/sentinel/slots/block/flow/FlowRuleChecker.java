@@ -15,14 +15,12 @@
  */
 package com.alibaba.csp.sentinel.slots.block.flow;
 
-import java.util.Collection;
-
 import com.alibaba.csp.sentinel.cluster.ClusterStateManager;
-import com.alibaba.csp.sentinel.cluster.server.EmbeddedClusterTokenServerProvider;
-import com.alibaba.csp.sentinel.cluster.client.TokenClientProvider;
-import com.alibaba.csp.sentinel.cluster.TokenResultStatus;
 import com.alibaba.csp.sentinel.cluster.TokenResult;
+import com.alibaba.csp.sentinel.cluster.TokenResultStatus;
 import com.alibaba.csp.sentinel.cluster.TokenService;
+import com.alibaba.csp.sentinel.cluster.client.TokenClientProvider;
+import com.alibaba.csp.sentinel.cluster.server.EmbeddedClusterTokenServerProvider;
 import com.alibaba.csp.sentinel.context.Context;
 import com.alibaba.csp.sentinel.log.RecordLog;
 import com.alibaba.csp.sentinel.node.DefaultNode;
@@ -33,6 +31,9 @@ import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.clusterbuilder.ClusterBuilderSlot;
 import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.csp.sentinel.util.function.Function;
+
+import java.util.ArrayList;
+import java.util.Collection;
 
 /**
  * Rule checker for flow control rules.
@@ -47,7 +48,47 @@ public class FlowRuleChecker {
             return;
         }
         Collection<FlowRule> rules = ruleProvider.apply(resource.getName());
-        if (rules != null) {
+        Collection<FlowRule> directCollection = null;
+        Collection<FlowRule> relateCollection = null;
+        Collection<FlowRule> otherCollection = null;
+        for (FlowRule rule : rules) {
+            int strategy = rule.getStrategy();
+            if (RuleConstant.STRATEGY_DIRECT == strategy) {
+                if (directCollection == null) {
+                    directCollection = new ArrayList<>();
+                }
+                directCollection.add(rule);
+            } else if (RuleConstant.STRATEGY_RELATE == strategy) {
+                if (relateCollection == null) {
+                    relateCollection = new ArrayList<>();
+                }
+                relateCollection.add(rule);
+            } else {
+                if (otherCollection == null) {
+                    otherCollection = new ArrayList<>();
+                }
+                otherCollection.add(rule);
+            }
+        }
+        if (relateCollection != null && directCollection != null) {
+            for (FlowRule rule : relateCollection) {
+                if (!canPassCheck(rule, context, node, count, prioritized)) {
+                    for (FlowRule directRule : directCollection) {
+                        if (!canPassCheck(directRule, context, node, count, prioritized)) {
+                            throw new FlowException(rule.getLimitApp(), rule);
+                        }
+                    }
+                    break;
+                }
+            }
+            if (otherCollection != null) {
+                for (FlowRule rule : otherCollection) {
+                    if (!canPassCheck(rule, context, node, count, prioritized)) {
+                        throw new FlowException(rule.getLimitApp(), rule);
+                    }
+                }
+            }
+        } else {
             for (FlowRule rule : rules) {
                 if (!canPassCheck(rule, context, node, count, prioritized)) {
                     throw new FlowException(rule.getLimitApp(), rule);
