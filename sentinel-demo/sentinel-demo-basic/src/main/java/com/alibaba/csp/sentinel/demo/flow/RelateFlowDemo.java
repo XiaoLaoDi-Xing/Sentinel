@@ -15,19 +15,19 @@
  */
 package com.alibaba.csp.sentinel.demo.flow;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.alibaba.csp.sentinel.util.TimeUtil;
 import com.alibaba.csp.sentinel.Entry;
 import com.alibaba.csp.sentinel.SphU;
 import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
+import com.alibaba.csp.sentinel.util.TimeUtil;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author jialiang.linjl
@@ -36,6 +36,7 @@ public class RelateFlowDemo {
 
     private static final String READKEY = "read";
     private static final String WRITEKEY = "write";
+    private static final String READANDWRITE = "read_and_write";
 
     private static AtomicInteger readPass = new AtomicInteger();
     private static AtomicInteger readBlock = new AtomicInteger();
@@ -47,7 +48,7 @@ public class RelateFlowDemo {
 
     private static volatile boolean stop = false;
 
-    private static final int threadCount = 32;
+    private static final int threadCount = 15;
 
     private static int seconds = 60 + 40;
 
@@ -56,7 +57,7 @@ public class RelateFlowDemo {
 
         tick();
         // first make the system run on a very low condition
-        read();
+        //read();
         write();
 
         System.out.println("===== begin to do flow control");
@@ -66,23 +67,42 @@ public class RelateFlowDemo {
 
     private static void initFlowQpsRule() {
         List<FlowRule> rules = new ArrayList<FlowRule>();
-        FlowRule rule1 = new FlowRule();
-        rule1.setResource(READKEY);
+        FlowRule rule1 = new FlowRule(READKEY);
         // set limit qps to 20
         rule1.setCount(20);
         rule1.setGrade(RuleConstant.FLOW_GRADE_QPS);
-        rule1.setLimitApp("default");
+        //rule1.setLimitApp("default");
 
-        FlowRule rule2 = new FlowRule();
-        rule2.setResource(READKEY);
+        FlowRule rule2 = new FlowRule(WRITEKEY);
         // set limit qps to 20
-        rule2.setCount(20);
+        rule2.setCount(180);
         rule2.setGrade(RuleConstant.FLOW_GRADE_QPS);
-        rule2.setStrategy(RuleConstant.STRATEGY_RELATE);
-        rule2.setRefResource(WRITEKEY);
-        rule2.setLimitApp("default");
+
+        FlowRule rule3 = new FlowRule(READKEY);
+        // set limit qps to 20
+        rule3.setCount(200);
+        rule3.setGrade(RuleConstant.FLOW_GRADE_QPS);
+        rule3.setStrategy(RuleConstant.STRATEGY_RELATE);
+        rule3.setRefResource(READANDWRITE);
+
+        FlowRule rule4 = new FlowRule(WRITEKEY);
+        // set limit qps to 20
+        rule4.setCount(1000);
+        rule4.setGrade(RuleConstant.FLOW_GRADE_QPS);
+        rule4.setStrategy(RuleConstant.STRATEGY_RELATE);
+        rule4.setRefResource(READANDWRITE);
+        //rule2.setLimitApp("default");
+
+        FlowRule rule5 = new FlowRule(READANDWRITE);
+        // set limit qps to 20
+        rule5.setCount(1000);
+        rule5.setGrade(RuleConstant.FLOW_GRADE_QPS);
 
         rules.add(rule1);
+        rules.add(rule2);
+        rules.add(rule3);
+        rules.add(rule4);
+        rules.add(rule5);
         FlowRuleManager.loadRules(rules);
     }
 
@@ -182,8 +202,10 @@ public class RelateFlowDemo {
         public void run() {
             while (!stop) {
                 Entry entry = null;
+                Entry entry2 = null;
 
                 try {
+                    entry2 = SphU.entry(READANDWRITE);
                     entry = SphU.entry(READKEY);
                     // token acquired, means pass
                     readPass.addAndGet(1);
@@ -196,6 +218,10 @@ public class RelateFlowDemo {
                     if (entry != null) {
                         entry.exit();
                     }
+                    if (entry2 != null) {
+                        entry2.exit();
+                    }
+
                 }
 
                 Random random2 = new Random();
@@ -213,8 +239,10 @@ public class RelateFlowDemo {
         public void run() {
             while (!stop) {
                 Entry entry = null;
+                Entry entry2 = null;
 
                 try {
+                    entry2 = SphU.entry(READANDWRITE);
                     entry = SphU.entry(WRITEKEY);
                     // token acquired, means pass
                     writePass.addAndGet(1);
@@ -227,6 +255,10 @@ public class RelateFlowDemo {
                     if (entry != null) {
                         entry.exit();
                     }
+                    if (entry2 != null) {
+                        entry2.exit();
+                    }
+
                 }
 
                 Random random2 = new Random();
