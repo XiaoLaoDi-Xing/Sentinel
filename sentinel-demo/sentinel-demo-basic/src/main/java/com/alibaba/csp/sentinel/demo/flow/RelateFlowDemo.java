@@ -48,7 +48,7 @@ public class RelateFlowDemo {
 
     private static volatile boolean stop = false;
 
-    private static final int threadCount = 15;
+    private static final int threadCount = 2;
 
     private static int seconds = 60 + 40;
 
@@ -57,7 +57,7 @@ public class RelateFlowDemo {
 
         tick();
         // first make the system run on a very low condition
-        //read();
+        read();
         write();
 
         System.out.println("===== begin to do flow control");
@@ -87,7 +87,7 @@ public class RelateFlowDemo {
 
         FlowRule rule4 = new FlowRule(WRITEKEY);
         // set limit qps to 20
-        rule4.setCount(1000);
+        rule4.setCount(200);
         rule4.setGrade(RuleConstant.FLOW_GRADE_QPS);
         rule4.setStrategy(RuleConstant.STRATEGY_RELATE);
         rule4.setRefResource(READANDWRITE);
@@ -205,8 +205,8 @@ public class RelateFlowDemo {
                 Entry entry2 = null;
 
                 try {
-                    entry2 = SphU.entry(READANDWRITE);
                     entry = SphU.entry(READKEY);
+                    entry2 = SphU.entry(READANDWRITE);
                     // token acquired, means pass
                     readPass.addAndGet(1);
                 } catch (BlockException e1) {
@@ -215,13 +215,12 @@ public class RelateFlowDemo {
                     // biz exception
                 } finally {
                     readTotal.incrementAndGet();
-                    if (entry != null) {
-                        entry.exit();
-                    }
                     if (entry2 != null) {
                         entry2.exit();
                     }
-
+                    if (entry != null) {
+                        entry.exit();
+                    }
                 }
 
                 Random random2 = new Random();
@@ -242,8 +241,8 @@ public class RelateFlowDemo {
                 Entry entry2 = null;
 
                 try {
-                    entry2 = SphU.entry(READANDWRITE);
                     entry = SphU.entry(WRITEKEY);
+                    entry2 = SphU.entry(READANDWRITE);
                     // token acquired, means pass
                     writePass.addAndGet(1);
                 } catch (BlockException e1) {
@@ -252,13 +251,12 @@ public class RelateFlowDemo {
                     // biz exception
                 } finally {
                     writeTotal.incrementAndGet();
-                    if (entry != null) {
-                        entry.exit();
-                    }
                     if (entry2 != null) {
                         entry2.exit();
                     }
-
+                    if (entry != null) {
+                        entry.exit();
+                    }
                 }
 
                 Random random2 = new Random();
